@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login — Avaliador</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial}</style>
+  </head>
+  <body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md bg-white p-6 rounded shadow">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <button type="button" id="back-btn" class="text-sm text-gray-600 hover:text-gray-800">← Voltar</button>
+        </div>
+        <h1 class="text-xl font-bold">Entrar / Cadastrar</h1>
+        <div class="w-16"></div>
+      </div>
+
+      <div class="mb-4 flex gap-2">
+        <button type="button" id="show-login" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">Entrar</button>
+        <button type="button" id="show-signup" class="flex-1 bg-gray-200 text-gray-700 px-3 py-2 rounded hover:bg-gray-300">Cadastrar</button>
+      </div>
+
+      <div id="forms">
+        <form id="login-form" class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Email</label>
+            <input id="login-email" type="email" required class="mt-1 block w-full border-gray-300 rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Senha</label>
+            <input id="login-password" type="password" required class="mt-1 block w-full border-gray-300 rounded px-3 py-2" />
+          </div>
+          <div>
+            <button id="login-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded">Entrar</button>
+          </div>
+          <div id="login-message" class="text-sm mt-2"></div>
+        </form>
+
+        <form id="signup-form" class="space-y-3 hidden">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Email</label>
+            <input id="signup-email" type="email" required class="mt-1 block w-full border-gray-300 rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Senha</label>
+            <input id="signup-password" type="password" inputmode="numeric" pattern="\d{4,6}" maxlength="6" required class="mt-1 block w-full border-gray-300 rounded px-3 py-2" placeholder="4-6 dígitos numéricos" />
+          </div>
+          <div>
+            <button id="signup-btn" class="w-full bg-green-600 text-white px-4 py-2 rounded">Cadastrar</button>
+          </div>
+          <div id="signup-message" class="text-sm mt-2"></div>
+        </form>
+      </div>
+
+      <div class="text-sm text-gray-500 mt-4">Depois de entrar, você será redirecionado para a página principal.</div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const { SUPABASE_URL, SUPABASE_ANON_KEY } = (typeof CONFIG !== 'undefined') ? CONFIG : { SUPABASE_URL: undefined, SUPABASE_ANON_KEY: undefined };
+        const authTokenKey = 'supabase_access_token';
+
+        function showMessage(el, msg, isError=false) {
+          el.textContent = msg;
+          el.className = isError ? 'text-sm mt-2 text-red-600' : 'text-sm mt-2 text-green-600';
+        }
+
+        function showDetailedError(el, res, bodyText) {
+          const msg = `Erro ${res.status}: ${res.statusText} ${bodyText ? '- ' + bodyText : ''}`;
+          showMessage(el, msg, true);
+        }
+
+        const backBtn = document.getElementById('back-btn');
+        const showLoginBtn = document.getElementById('show-login');
+        const showSignupBtn = document.getElementById('show-signup');
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+
+        function setActiveTab(tab) {
+          if (tab === 'login') {
+            showLoginBtn.classList.remove('bg-gray-200','text-gray-700');
+            showLoginBtn.classList.add('bg-blue-700','text-white');
+            showSignupBtn.classList.remove('bg-green-600','text-white');
+            showSignupBtn.classList.add('bg-gray-200','text-gray-700');
+            loginForm.classList.remove('hidden');
+            signupForm.classList.add('hidden');
+          } else {
+            showSignupBtn.classList.remove('bg-gray-200','text-gray-700');
+            showSignupBtn.classList.add('bg-green-600','text-white');
+            showLoginBtn.classList.remove('bg-blue-700','text-white');
+            showLoginBtn.classList.add('bg-gray-200','text-gray-700');
+            signupForm.classList.remove('hidden');
+            loginForm.classList.add('hidden');
+          }
+        }
+
+        // initial active tab
+        setActiveTab('login');
+
+        if (showLoginBtn && showSignupBtn) {
+          showLoginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            setActiveTab('login');
+            document.getElementById('login-email').focus();
+          });
+          showSignupBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            setActiveTab('signup');
+            document.getElementById('signup-email').focus();
+          });
+        }
+
+        if (backBtn) {
+          backBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (window.history.length > 1) window.history.back(); else window.location.href = 'index.html';
+          });
+        }
+
+        async function doLogin(e) {
+          e.preventDefault();
+          const email = document.getElementById('login-email').value.trim();
+          const password = document.getElementById('login-password').value;
+          const msg = document.getElementById('login-message');
+          if (!email || !password) return showMessage(msg, 'Preencha email e senha', true);
+          try {
+            const url = `${SUPABASE_URL}/auth/v1/token?grant_type=password`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ email, password })
+            });
+            let data = null;
+            let text = null;
+            try { data = await res.json(); } catch (e) { text = await res.text(); }
+            if (!res.ok) {
+              // show detailed error when possible
+              const bodyText = data ? (data?.error_description || data?.error || JSON.stringify(data)) : text;
+              showDetailedError(msg, res, bodyText);
+              console.error('Login failed', res.status, res.statusText, data || text);
+              return;
+            }
+            if (data.access_token) {
+              localStorage.setItem(authTokenKey, data.access_token);
+              showMessage(msg, 'Logado com sucesso');
+              setTimeout(() => { window.location.href = 'index.html'; }, 800);
+            } else {
+              showMessage(msg, 'Resposta sem token. Verifique o e-mail (confirmação pode ser necessária).', true);
+            }
+          } catch (err) {
+            showMessage(msg, 'Erro: ' + (err.message || err), true);
+            console.error('Login exception', err);
+          }
+        }
+
+        async function doSignup(e) {
+          e.preventDefault();
+          const email = document.getElementById('signup-email').value.trim();
+          const password = document.getElementById('signup-password').value;
+          const msg = document.getElementById('signup-message');
+          if (!email || !password) return showMessage(msg, 'Preencha email e senha', true);
+
+          // Password must be numeric only, between 4 and 6 digits
+          const passValid = /^[0-9]{4,6}$/.test(password);
+          if (!passValid) return showMessage(msg, 'Senha deve conter apenas números (4-6 dígitos)', true);
+
+          try {
+            const url = `${SUPABASE_URL}/auth/v1/signup`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ email, password })
+            });
+            let data = null; let text = null;
+            try { data = await res.json(); } catch(e) { text = await res.text(); }
+            if (!res.ok) {
+              const bodyText = data ? (data?.error_description || data?.error || JSON.stringify(data)) : text;
+              showDetailedError(msg, res, bodyText);
+              console.error('Signup failed', res.status, res.statusText, data || text);
+              return;
+            }
+
+            // If signup returned access_token, great — store and redirect
+            if (data && data.access_token) {
+              localStorage.setItem(authTokenKey, data.access_token);
+              showMessage(msg, 'Cadastrado e logado com sucesso');
+              setTimeout(() => { window.location.href = 'index.html'; }, 800);
+              return;
+            }
+
+            // Otherwise attempt immediate login (some Supabase projects don't auto-issue token on signup)
+            try {
+              const tokenUrl = `${SUPABASE_URL}/auth/v1/token?grant_type=password`;
+              const loginRes = await fetch(tokenUrl, {
+                method: 'POST',
+                headers: {
+                  'apikey': SUPABASE_ANON_KEY,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+              });
+              let loginData = null; let loginText = null;
+              try { loginData = await loginRes.json(); } catch(e) { loginText = await loginRes.text(); }
+              if (loginRes.ok && loginData && loginData.access_token) {
+                localStorage.setItem(authTokenKey, loginData.access_token);
+                showMessage(msg, 'Cadastrado e logado com sucesso');
+                setTimeout(() => { window.location.href = 'index.html'; }, 800);
+                return;
+              } else {
+                const bodyText = loginData ? (loginData?.error_description || loginData?.error || JSON.stringify(loginData)) : loginText;
+                console.warn('login after signup did not return token', loginRes.status, loginRes.statusText, bodyText);
+              }
+            } catch (innerErr) {
+              console.warn('login after signup failed', innerErr);
+            }
+
+            // If we reach here, signup succeeded but immediate login didn't work
+            showMessage(msg, 'Cadastro efetuado. Verifique seu e-mail para confirmação ou faça login manualmente.');
+          } catch (err) {
+            showMessage(msg, 'Erro: ' + (err.message || err), true);
+          }
+        }
+
+        if (loginForm) loginForm.addEventListener('submit', doLogin);
+        if (signupForm) signupForm.addEventListener('submit', doSignup);
+      });
+    </script>
+  </body>
+</html>
